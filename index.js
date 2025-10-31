@@ -54,9 +54,10 @@ app.post("/api/v1/users/:userId/car-image", async (req, res) => {
       imageUrl = supabase.storage.from("images").getPublicUrl(name).data.publicUrl;
     } else {
       // 🧠 Prompt optimizado para fondo transparente real
-      const prompt = `Genera una imagen ultra realista en formato PNG de un auto ${marca} ${modelo} ${anio}, vista 3/4 frontal, render 3D en color blanco, sin fondo (fondo totalmente transparente), sin reflejos en el suelo ni sombras. 
-Asegúrate de que los rines sean los originales de agencia. La cámara debe estar a 30 cm del suelo mostrando el frente completo del auto. 
-El auto debe ocupar el 95% del ancho del encuadre. Resolución: 780x440 px.`;
+      const prompt = `Genera una imagen PNG con fondo totalmente transparente de un auto ${marca} ${modelo} ${anio}, vista 3/4 frontal, render 3D realista, sin reflejos ni sombras. 
+El encuadre debe tener formato horizontal 16:9 (780x440 px exactos), con el auto ocupando el 95% del ancho. 
+Asegúrate de mantener el lienzo completo en esas proporciones, aunque el fondo sea transparente.`;
+
 
       // 🚀 Generar imagen con Gemini SDK
       const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
