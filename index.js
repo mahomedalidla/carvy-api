@@ -7,7 +7,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY);
 
 const app = express();
 app.use(express.json());
-app.use(cors()); // ⚡ permite llamadas desde cualquier origen (ajusta en producción)
+app.use(cors());
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -53,10 +53,10 @@ app.post("/api/v1/users/:userId/car-image", async (req, res) => {
     if (fileExists) {
       imageUrl = supabase.storage.from("images").getPublicUrl(name).data.publicUrl;
     } else {
-      // 🧠 Prompt para Gemini
-      const prompt = `Genera una imagen de un auto ${marca} ${modelo} ${anio}, vista 3/4 frontal, con el estilo render 3D del auto en color blanco, con fondo **transparente** (png), sin reflejos en el suelo, asegúrate de que los rines son los originales que trae el auto de agencia. 
-La perspectiva de la foto debe ser a 30 cm desde el suelo y que se vea el frente completo del auto.
-El auto debe de abarcar el 95% del ancho de la imagen, y la resolución de la imagen debe ser de 780x440 px.`;
+      // 🧠 Prompt optimizado para fondo transparente real
+      const prompt = `Genera una imagen ultra realista en formato PNG de un auto ${marca} ${modelo} ${anio}, vista 3/4 frontal, render 3D en color blanco, sin fondo (fondo totalmente transparente), sin reflejos en el suelo ni sombras. 
+Asegúrate de que los rines sean los originales de agencia. La cámara debe estar a 30 cm del suelo mostrando el frente completo del auto. 
+El auto debe ocupar el 95% del ancho del encuadre. Resolución: 780x440 px.`;
 
       // 🚀 Generar imagen con Gemini SDK
       const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
@@ -66,11 +66,12 @@ El auto debe de abarcar el 95% del ancho de la imagen, y la resolución de la im
           imageConfig: {
             aspectRatio: "16:9",
             mimeType: "image/png",
+            transparency: true, // ⚡ Solicita PNG con canal alpha
           },
         },
       });
 
-      // 🔍 Extraer imagen (base64)
+      // 🔍 Extraer imagen base64
       const imageBase64 =
         response?.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
