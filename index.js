@@ -1,14 +1,18 @@
 import express from "express";
 import { createClient } from "@supabase/supabase-js";
 import cors from "cors";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY);
+import OpenAI from "openai";
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
+// 🔐 Inicializar OpenAI
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// 🔐 Inicializar Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -34,6 +38,7 @@ app.post("/api/v1/users/:userId/car-image", async (req, res) => {
 
     const name = `${normalizeName(marca, modelo, anio)}.png`;
 
+    // 🧾 Buscar registro del usuario
     const { data: vehicleUsers, error: userError } = await supabase
       .from("vehicles_to_users")
       .select("*")
@@ -46,40 +51,38 @@ app.post("/api/v1/users/:userId/car-image", async (req, res) => {
 
     const vehicleUser = vehicleUsers[0];
 
+    // 🔍 Verificar si ya existe imagen
     const { data: list } = await supabase.storage.from("images").list();
     let imageUrl;
-
     const fileExists = list?.find((file) => file.name === name);
+
     if (fileExists) {
       imageUrl = supabase.storage.from("images").getPublicUrl(name).data.publicUrl;
     } else {
-      // 🧠 Prompt optimizado para fondo transparente real
-      const prompt = `Genera una imagen PNG con fondo totalmente transparente de un auto ${marca} ${modelo} ${anio}, vista 3/4 frontal, render 3D realista, sin reflejos ni sombras. 
-El encuadre debe tener formato horizontal 16:9 (780x440 px exactos), con el auto ocupando el 95% del ancho. 
-Asegúrate de mantener el lienzo completo en esas proporciones, aunque el fondo sea transparente.`;
+      // 🧠 Prompt para DALL·E
+      const prompt = `
+        Un automóvil ${marca} ${modelo} ${anio}, render 3D realista, vista 3/4 frontal.
+        Fondo completamente transparente (sin sombras, sin reflejos).
+        El auto debe ocupar el 95% del ancho de la imagen, proporción 16:9 (780x440 px).
+      `;
 
-
-      // 🚀 Generar imagen con Gemini SDK
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
-      const response = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: {
-          imageConfig: {
-            aspectRatio: "16:9",
-          },
-        },
+      // 🚀 Generar imagen con OpenAI
+      const response = await openai.images.generate({
+        model: "gpt-image-1",
+        prompt,
+        size: "780x440",
+        n: 1,
+        background: "transparent",
       });
 
-      // 🔍 Extraer imagen base64
-      const imageBase64 =
-        response?.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      const imageBase64 = response.data[0].b64_json;
 
       if (!imageBase64)
-        return res.status(500).json({ error: "Gemini no devolvió imagen" });
+        return res.status(500).json({ error: "OpenAI no devolvió imagen" });
 
       const buffer = Buffer.from(imageBase64, "base64");
 
-      // 🪣 Subir a Supabase Storage
+      // 🪣 Subir imagen a Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from("images")
         .upload(name, buffer, {
@@ -91,8 +94,6 @@ Asegúrate de mantener el lienzo completo en esas proporciones, aunque el fondo 
         return res.status(500).json({ error: "Error subiendo a Storage" });
 
       imageUrl = supabase.storage.from("images").getPublicUrl(name).data.publicUrl;
-      if (!imageUrl)
-        return res.status(500).json({ error: "No se pudo obtener URL pública" });
     }
 
     // 🧾 Actualizar URL en DB
