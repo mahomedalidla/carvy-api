@@ -1,7 +1,9 @@
 import express from "express";
-import fetch from "node-fetch";
 import { createClient } from "@supabase/supabase-js";
 import cors from "cors";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY);
 
 const app = express();
 app.use(express.json());
@@ -11,9 +13,6 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-
-const GEMINI_API_URL = process.env.GEMINI_API_URL;
-const GEMINI_KEY = process.env.GEMINI_KEY;
 
 function normalizeName(marca, modelo, anio) {
   return `${modelo}_${marca}_${anio}`
@@ -33,7 +32,7 @@ app.post("/api/v1/users/:userId/car-image", async (req, res) => {
     if (!marca || !modelo || !anio)
       return res.status(400).json({ error: "Faltan campos" });
 
-    const name = `${normalizeName(marca, modelo, anio)}.jpg`;
+    const name = `${normalizeName(marca, modelo, anio)}.png`;
 
     const { data: vehicleUsers, error: userError } = await supabase
       .from("vehicles_to_users")
@@ -52,48 +51,51 @@ app.post("/api/v1/users/:userId/car-image", async (req, res) => {
 
     const fileExists = list?.find((file) => file.name === name);
     if (fileExists) {
-      imageUrl = supabase.storage.from("images").getPublicUrl(name)
-        .data.publicUrl;
+      imageUrl = supabase.storage.from("images").getPublicUrl(name).data.publicUrl;
     } else {
-      // const prompt = `Imagen realista de un auto con fondo **transparentte** (png) ${marca} ${modelo} ${anio}, vista 3/4 frontal, fondo neutro, estilo fotográfico`;
-      const prompt = `Genera una imagen de un auto ${marca} ${modelo} ${anio}, con el estilo render 3d del auto en color blanco, con fondo **transparentte** (png), sin reflejos en el suelo, asegúrate de que los rines son los originales que trae el auto de agencia. La perspectiva de la foto debe de ser a 30cm desde el suelo y que se vea el frente completo del auto.
-El auto debe de abarcar el 95% del ancho de la imagen, y la resolución de la imagen debe de ser de 780x440 px`;
-      const geminiResp = await fetch(GEMINI_API_URL, {
-        method: "POST",
-        headers: {
-          "x-goog-api-key": GEMINI_KEY,
-          "Content-Type": "application/json",
+      // 🧠 Prompt para Gemini
+      const prompt = `Genera una imagen de un auto ${marca} ${modelo} ${anio}, vista 3/4 frontal, con el estilo render 3D del auto en color blanco, con fondo **transparente** (png), sin reflejos en el suelo, asegúrate de que los rines son los originales que trae el auto de agencia. 
+La perspectiva de la foto debe ser a 30 cm desde el suelo y que se vea el frente completo del auto.
+El auto debe de abarcar el 95% del ancho de la imagen, y la resolución de la imagen debe ser de 780x440 px.`;
+
+      // 🚀 Generar imagen con Gemini SDK
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
+      const response = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: {
+          imageConfig: {
+            aspectRatio: "16:9",
+            mimeType: "image/png",
+          },
         },
-        body: JSON.stringify({
-          instances: [{ prompt }],
-          parameters: { sampleCount: 1 },
-        }),
       });
 
-      const geminiJson = await geminiResp.json();
-      const base64 =
-        geminiJson?.predictions?.[0]?.bytesBase64Encoded ||
-        geminiJson?.predictions?.[0]?.image;
+      // 🔍 Extraer imagen (base64)
+      const imageBase64 =
+        response?.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
-      if (!base64)
+      if (!imageBase64)
         return res.status(500).json({ error: "Gemini no devolvió imagen" });
 
-      const buffer = Buffer.from(base64, "base64");
+      const buffer = Buffer.from(imageBase64, "base64");
+
+      // 🪣 Subir a Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from("images")
-        .upload(name, buffer, { contentType: "image/jpeg", upsert: true });
+        .upload(name, buffer, {
+          contentType: "image/png",
+          upsert: true,
+        });
 
       if (uploadError)
         return res.status(500).json({ error: "Error subiendo a Storage" });
 
-      imageUrl = supabase.storage.from("images").getPublicUrl(name)
-        .data.publicUrl;
+      imageUrl = supabase.storage.from("images").getPublicUrl(name).data.publicUrl;
       if (!imageUrl)
-        return res
-          .status(500)
-          .json({ error: "No se pudo obtener URL pública" });
+        return res.status(500).json({ error: "No se pudo obtener URL pública" });
     }
 
+    // 🧾 Actualizar URL en DB
     const { error: updateError } = await supabase
       .from("vehicles_to_users")
       .update({ image_url: imageUrl })
