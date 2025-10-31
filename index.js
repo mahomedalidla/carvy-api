@@ -66,8 +66,6 @@ Asegúrate de mantener el lienzo completo en esas proporciones, aunque el fondo 
         config: {
           imageConfig: {
             aspectRatio: "16:9",
-            mimeType: "image/png",
-            transparency: true, // ⚡ Solicita PNG con canal alpha
           },
         },
       });
