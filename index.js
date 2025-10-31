@@ -53,7 +53,7 @@ app.post("/api/v1/users/:userId/car-image", async (req, res) => {
     if (fileExists) {
       imageUrl = supabase.storage.from("images").getPublicUrl(name).data.publicUrl;
     } else {
-      const prompt = `Imagen realista de un auto sin fondo (png) ${marca} ${modelo} ${anio}, vista 3/4 frontal, fondo neutro, estilo fotográfico`;
+      const prompt = `Imagen realista de un auto con fondo transparentte (png) ${marca} ${modelo} ${anio}, vista 3/4 frontal, fondo neutro, estilo fotográfico`;
       const geminiResp = await fetch(GEMINI_API_URL, {
         method: "POST",
         headers: {
