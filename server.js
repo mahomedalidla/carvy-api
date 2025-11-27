@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import cors from "cors";
 import OpenAI from "openai";
 
+
+
 const app = express();
 app.use(express.json());
 app.use(cors());
@@ -17,6 +19,11 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+// 🔐 Inicializar remove.bg
+const removeBg = new RemoveBg({
+    apiKey: process.env.REMOVE_BG_API_KEY, // Asegúrate de tener esta variable en .env
+});
 
 function normalizeName(marca, modelo, anio) {
   return `${modelo}_${marca}_${anio}`
@@ -83,7 +90,7 @@ app.post("/api/v1/users/:userId/car-image", async (req, res) => {
       `;
 
       const response = await openai.images.generate({
-        model: "gpt-image-1",
+        model: "dall-e-3",
         prompt,
         size: "780x440",
         n: 1,
