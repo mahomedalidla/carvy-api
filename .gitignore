@@ -1,2 +1,13 @@
-.envcop
+# Entorno virtual
+venv/
+
+# Variables de entorno
 .env
+
+# Cachés de Python
+__pycache__/
+*.pyc
+
+# Archivos temporales
+*.log
+temp/
