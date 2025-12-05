@@ -3,6 +3,7 @@ FROM python:3.11-slim
 
 # 1. Instalar dependencias mínimas del sistema operativo
 # Esto permite que las librerías de imagen se instalen usando archivos binarios (wheels).
+# Hemos quitado compiladores ('build-essential') para forzar el uso de precompilados.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libsm6 libxext6 \
     zlib1g-dev libjpeg-dev \
@@ -14,8 +15,9 @@ WORKDIR /app
 # 3. Copiar requirements.txt
 COPY requirements.txt .
 
-# 4. INSTALACIÓN DE PYTHON (Paso más crítico)
-# Usamos un solo RUN para evitar problemas de caché entre pasos.
+# 4. INSTALACIÓN DE PYTHON (CRÍTICO: Un solo paso para evitar problemas de caché)
+# Al no tener versiones fijas, pip elegirá las versiones que tienen wheels precompilados,
+# lo que reduce drásticamente el pico de consumo de RAM.
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 5. FUERZA LA DESCARGA Y CACHÉ DEL MODELO
